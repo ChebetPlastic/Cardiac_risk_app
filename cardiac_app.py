@@ -5,12 +5,14 @@ import random
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 import altair as alt
+import os
 
 # ========== Page Setup ==========
 st.set_page_config(page_title="Cardiac Risk Monitor", page_icon="🫀", layout="centered")
 
-# Optional logo (add logo.png to repo)
-st.sidebar.image("logo.png", width=120)
+# Safely show logo only if available
+if os.path.exists("logo.png"):
+    st.sidebar.image("logo.png", width=120)
 
 st.title("💓 Cardiac Risk Monitor 2.0")
 st.caption("Switch between Auto and Manual input • Visualize trends • Refreshes every 3 minutes")
@@ -97,7 +99,7 @@ if mode == "✍️ Manual Mode":
         save_reading(timestamp, spo2, hr, ecg, bmi, score, level)
         st.metric(label="Manual Risk Result", value=level, delta=f"Score: {score}")
 
-# ========== History ==========
+# ========== History + Chart ==========
 st.markdown("---")
 st.markdown("### 📋 Reading History")
 df = load_history()
@@ -109,7 +111,6 @@ else:
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("📤 Export CSV", data=csv, file_name="cardiac_readings.csv", mime="text/csv")
 
-    # Risk Trend Visualization
     st.markdown("### 📈 Risk Score Trend (Color Coded)")
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.sort_values("timestamp")
