@@ -77,4 +77,3 @@ elif score >= 3:
     st.warning("⚠️ Moderate Risk: Monitor closely.")
 else:
     st.success("✅ Stable condition.")
-  
