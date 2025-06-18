@@ -3,17 +3,27 @@
 import streamlit as st
 from datetime import datetime
 
-# Set page configuration
-st.set_page_config(page_title="Cardiac Risk Monitor", page_icon="❤️", layout="centered")
+# Page configuration
+st.set_page_config(
+    page_title="Cardiac Risk Monitor",
+    page_icon="❤️",
+    layout="centered"
+)
 
-st.title("💓 Cardiac Risk Monitor (Wearable Prototype)")
-st.markdown("Monitor a patient’s cardiac risk using simulated smart device data.")
+# Title and Introduction
+st.title("💓 Cardiac Risk Monitor")
+st.markdown("A prototype for assessing cardiac risk using simulated wearable data.")
 
-# Simulated Input (can later be connected to wearable inputs)
-bmi = st.slider("Patient BMI", 15.0, 45.0, 25.0)
-spo2 = st.slider("Blood Oxygen Level (SpO2 %)", 80.0, 100.0, 96.0)
-hr = st.slider("Heart Rate (bpm)", 30, 160, 75)
-ecg = st.selectbox("ECG Classification", [0, 1, 3], index=0)
+# Optional: Compact view toggle for smaller devices
+compact = st.toggle("Enable Compact View", value=True)
+
+# Inputs
+with st.container():
+    st.markdown("#### 🩺 Patient Input")
+    bmi = st.slider("BMI", 15.0, 45.0, 25.0)
+    spo2 = st.slider("SpO₂ (%)", 80.0, 100.0, 96.0)
+    hr = st.slider("Heart Rate (bpm)", 30, 160, 75)
+    ecg = st.selectbox("ECG Classification", [0, 1, 3])
 
 def calculate_risk(spo2, hr, ecg, bmi):
     score = 0
@@ -51,17 +61,20 @@ def calculate_risk(spo2, hr, ecg, bmi):
     else:
         return score, "🔴 High Risk"
 
+# Risk Calculation
 score, level = calculate_risk(spo2, hr, ecg, bmi)
 
-# Display the results
+# Results
+st.markdown("---")
 st.markdown(f"### 📊 Risk Score: **{score}**")
 st.markdown(f"### 🔥 Risk Level: **{level}**")
 st.caption(f"🕒 Assessed at: {datetime.now().strftime('%H:%M:%S')}")
 
-# Recommendation messages
+# Warnings
 if score >= 6:
     st.error("🚨 High Risk: Immediate medical attention advised.")
 elif score >= 3:
     st.warning("⚠️ Moderate Risk: Monitor closely.")
 else:
     st.success("✅ Stable condition.")
+  
