@@ -1,30 +1,32 @@
-# cardiac_app.py
-
 import streamlit as st
+import pandas as pd
+import sqlite3
 from datetime import datetime
+import random
+from streamlit_autorefresh import st_autorefresh
 
-# Page configuration
-st.set_page_config(
-    page_title="Cardiac Risk Monitor",
-    page_icon="❤️",
-    layout="centered"
-)
+# ========== Setup ==========
+st.set_page_config(page_title="Cardiac Risk 2", page_icon="🫀", layout="centered")
+st.title("💓 Cardiac Risk Monitor 2.0")
+st.caption("Optimized for mobile and touchscreen devices")
 
-# Title and Introduction
-st.title("💓 Cardiac Risk Monitor")
-st.markdown("A prototype for assessing cardiac risk using simulated wearable data.")
+# Auto-refresh every 3 minutes (180000 ms)
+st_autorefresh(interval=180000, key="refresh")
 
-# Optional: Compact view toggle for smaller devices
-compact = st.toggle("Enable Compact View", value=True)
+DB_NAME = "cardiac_monitor.db"
 
-# Inputs
-with st.container():
-    st.markdown("#### 🩺 Patient Input")
-    bmi = st.slider("BMI", 15.0, 45.0, 25.0)
-    spo2 = st.slider("SpO₂ (%)", 80.0, 100.0, 96.0)
-    hr = st.slider("Heart Rate (bpm)", 30, 160, 75)
-    ecg = st.selectbox("ECG Classification", [0, 1, 3])
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS readings
+                 (timestamp TEXT, spo2 REAL, hr INTEGER, ecg INTEGER,
+                  bmi REAL, total_risk INTEGER, risk_level TEXT)''')
+    conn.commit()
+    conn.close()
 
+init_db()
+
+# ========== Risk Calculation ==========
 def calculate_risk(spo2, hr, ecg, bmi):
     score = 0
 
@@ -53,27 +55,56 @@ def calculate_risk(spo2, hr, ecg, bmi):
         score += 1
 
     if score == 0:
-        return score, "🟢 Normal"
+        level = "🟢 Normal"
     elif score <= 2:
-        return score, "🟡 Low Risk"
+        level = "🟡 Low Risk"
     elif score <= 5:
-        return score, "🟠 Medium Risk"
+        level = "🟠 Medium Risk"
     else:
-        return score, "🔴 High Risk"
+        level = "🔴 High Risk"
 
-# Risk Calculation
-score, level = calculate_risk(spo2, hr, ecg, bmi)
+    return score, level
 
-# Results
-st.markdown("---")
-st.markdown(f"### 📊 Risk Score: **{score}**")
-st.markdown(f"### 🔥 Risk Level: **{level}**")
-st.caption(f"🕒 Assessed at: {datetime.now().strftime('%H:%M:%S')}")
+def save_reading(ts, spo2, hr, ecg, bmi, total_risk, level):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('INSERT INTO readings VALUES (?, ?, ?, ?, ?, ?, ?)',
+              (ts, spo2, hr, ecg, bmi, total_risk, level))
+    conn.commit()
+    conn.close()
 
-# Warnings
-if score >= 6:
-    st.error("🚨 High Risk: Immediate medical attention advised.")
-elif score >= 3:
-    st.warning("⚠️ Moderate Risk: Monitor closely.")
+def load_history(limit=10):
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql(f'SELECT * FROM readings ORDER BY timestamp DESC LIMIT {limit}', conn)
+    conn.close()
+    return df
+
+# ========== UI Inputs ==========
+st.markdown("### 🩺 Simulate Vital Signs")
+
+spo2 = st.slider("SpO₂ (%)", 85, 100, 96, help="Oxygen saturation level")
+hr = st.slider("Heart Rate (bpm)", 30, 160, 75, help="Pulse rate")
+ecg = st.selectbox("ECG Classification", [0, 1, 3], help="0=Normal, 3=Abnormal")
+bmi = st.slider("BMI", 15.0, 50.0, 25.0, help="Body Mass Index")
+
+st.markdown("—")
+
+# ========== Assess Button ==========
+if st.button("🧠 Assess Risk Now", use_container_width=True):
+    timestamp = datetime.now().isoformat()
+    total_risk, level = calculate_risk(spo2, hr, ecg, bmi)
+    save_reading(timestamp, spo2, hr, ecg, bmi, total_risk, level)
+
+    st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} • Risk: {level} • Score: {total_risk}")
+    st.markdown("---")
+
+# ========== Display History ==========
+st.markdown("### 📋 Last 10 Readings")
+
+df = load_history(10)
+if df.empty:
+    st.info("No readings yet. Simulate a reading above!")
 else:
-    st.success("✅ Stable condition.")
+    st.dataframe(df, use_container_width=True)
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("📤 Export History", data=csv, file_name="cardiac_history.csv", mime="text/csv", use_container_width=True)
