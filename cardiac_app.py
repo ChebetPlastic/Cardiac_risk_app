@@ -5,12 +5,18 @@ import random
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 import altair as alt
+import os
 
 # ========== Page Setup ==========
 st.set_page_config(page_title="Cardiac Risk Monitor", page_icon="🫀", layout="centered")
 
-# Optional logo (add logo.png to repo)
-st.sidebar.image("logo.png", width=120)
+# Sidebar Branding: Logo or fallback
+logo_path = "logo.png"
+if os.path.exists(logo_path):
+    st.sidebar.image(logo_path, width=120)
+else:
+    st.sidebar.markdown("### 🫀 Cardiac Risk Monitor")
+    st.sidebar.caption("Vitals & risk scoring for streamlined monitoring")
 
 st.title("💓 Cardiac Risk Monitor 2.0")
 st.caption("Switch between Auto and Manual input • Visualize trends • Refreshes every 3 minutes")
@@ -83,7 +89,7 @@ if mode == "🔁 Auto Mode":
         save_reading(timestamp, spo2, hr, ecg, bmi, score, level)
         st.metric(label="Current Auto Risk", value=level, delta=f"Score: {score}")
     else:
-        st.info("Waiting for auto-refresh...")
+        st.info("⏳ Waiting for first auto-refresh...")
 
 # ========== Manual Mode ==========
 if mode == "✍️ Manual Mode":
@@ -109,13 +115,12 @@ else:
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("📤 Export CSV", data=csv, file_name="cardiac_readings.csv", mime="text/csv")
 
-    # Risk Trend Visualization
     st.markdown("### 📈 Risk Score Trend (Color Coded)")
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.sort_values("timestamp")
 
     def risk_color(score):
-        if score == 0: return "#21BF73"  # green
+        if score == 0: return "#21BF73"
         elif score <= 2: return "#FFC300"
         elif score <= 5: return "#FF6F00"
         else: return "#C70039"
