@@ -1,30 +1,32 @@
-# 💓 Cardiac Risk Monitor
-...
-Made with ❤️ by Maren
+# 💓 Cardiac Risk Monitor 2.0
 
-A mobile-friendly Streamlit app that simulates or manually logs vital sign readings to assess cardiac risk in real time.
+Real-time vitals monitoring with cardiac risk scoring, powered by Streamlit.  
+Visualize trends, export data, and assess patients with intuitive auto/manual input modes.
 
-## 🔁 Features
-- **Auto Mode**: Automatically generates vitals every 3 minutes
-- **Manual Mode**: Enter SpO₂, Heart Rate, ECG, and BMI manually
-- **Risk scoring** based on input
-- **Downloadable reading history**
-- **Mobile-first design**, suitable for tablets and wearables
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https:[//your-subdomain.streamlit.app](https://cardiacriskapp.streamlit.app/)
 
-## ⚙️ Tech Stack
-- Streamlit
-- Python
-- SQLite (local lightweight storage)
-- Auto-refresh via `streamlit-autorefresh`
+---
 
-## 🚀 Launch the App
+## 🔧 Features
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://<your-app-name>.streamlit.app)
+- 🔁 **Auto Mode**: Simulates vitals every 3 minutes
+- ✍️ **Manual Mode**: Custom SpO₂, HR, ECG, BMI inputs
+- 📉 **Risk Scoring**: Interpretable emoji and color coding
+- 📈 **Trend Chart**: Time-series graph of total risk
+- 🧮 **BMI Support**: Adjustable or auto-computed
+- 📤 **Export CSV**: Snapshot and archive reading history
+- 🩻 **Optional Branding**: Add your own logo in `logo.png`
+- 🎨 **Theme Styling**: Streamlit config for red & clinical whites
 
-> Replace `<your-app-name>` with your deployed app's subdomain.
+---
 
-## 📦 Installation (Optional: run locally)
+## 🚀 Get Started
+
+### 🔌 Install Dependencies
 
 ```bash
-pip install streamlit streamlit-autorefresh pandas
-streamlit run cardiac_risk_2.py
+pip install streamlit streamlit-autorefresh pandas altair
+
+## ❤️ Designed by Maren
+
+_For smart, scalable care — one heartbeat at a time._
