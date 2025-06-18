@@ -2,19 +2,19 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
-import random
 from streamlit_autorefresh import st_autorefresh
 
-# ========== Setup ==========
-st.set_page_config(page_title="Cardiac Risk 2", page_icon="🫀", layout="centered")
+# ========== Basic Configuration ==========
+st.set_page_config(page_title="Cardiac Risk 2.0", page_icon="🫀", layout="centered")
 st.title("💓 Cardiac Risk Monitor 2.0")
-st.caption("Optimized for mobile and touchscreen devices")
+st.caption("Optimized for touchscreen and mobile devices")
 
-# Auto-refresh every 3 minutes (180000 ms)
-st_autorefresh(interval=180000, key="refresh")
+# ========== Auto-refresh every 3 minutes ==========
+st_autorefresh(interval=180000, key="auto_refresh")
 
 DB_NAME = "cardiac_monitor.db"
 
+# ========== Database Setup ==========
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -26,7 +26,7 @@ def init_db():
 
 init_db()
 
-# ========== Risk Calculation ==========
+# ========== Risk Calculation Logic ==========
 def calculate_risk(spo2, hr, ecg, bmi):
     score = 0
 
@@ -79,32 +79,32 @@ def load_history(limit=10):
     conn.close()
     return df
 
-# ========== UI Inputs ==========
-st.markdown("### 🩺 Simulate Vital Signs")
+# ========== Input Section ==========
+st.markdown("### 🩺 Enter Vital Readings")
 
 spo2 = st.slider("SpO₂ (%)", 85, 100, 96, help="Oxygen saturation level")
-hr = st.slider("Heart Rate (bpm)", 30, 160, 75, help="Pulse rate")
+hr = st.slider("Heart Rate (bpm)", 30, 160, 75, help="Beats per minute")
 ecg = st.selectbox("ECG Classification", [0, 1, 3], help="0=Normal, 3=Abnormal")
-bmi = st.slider("BMI", 15.0, 50.0, 25.0, help="Body Mass Index")
+bmi = st.slider("Body Mass Index (BMI)", 15.0, 50.0, 25.0)
 
 st.markdown("—")
 
-# ========== Assess Button ==========
+# ========== Risk Calculation Trigger ==========
 if st.button("🧠 Assess Risk Now", use_container_width=True):
     timestamp = datetime.now().isoformat()
-    total_risk, level = calculate_risk(spo2, hr, ecg, bmi)
-    save_reading(timestamp, spo2, hr, ecg, bmi, total_risk, level)
+    total_risk, risk_level = calculate_risk(spo2, hr, ecg, bmi)
+    save_reading(timestamp, spo2, hr, ecg, bmi, total_risk, risk_level)
 
-    st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} • Risk: {level} • Score: {total_risk}")
+    st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} — Risk: {risk_level} • Score: {total_risk}")
     st.markdown("---")
 
-# ========== Display History ==========
-st.markdown("### 📋 Last 10 Readings")
+# ========== History Table ==========
+st.markdown("### 📋 Recent Readings")
+history = load_history()
 
-df = load_history(10)
-if df.empty:
-    st.info("No readings yet. Simulate a reading above!")
+if history.empty:
+    st.info("No readings saved yet.")
 else:
-    st.dataframe(df, use_container_width=True)
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("📤 Export History", data=csv, file_name="cardiac_history.csv", mime="text/csv", use_container_width=True)
+    st.dataframe(history, use_container_width=True)
+    csv = history.to_csv(index=False).encode("utf-8")
+    st.download_button("📤 Download CSV", data=csv, file_name="cardiac_history.csv", mime="text/csv", use_container_width=True)
