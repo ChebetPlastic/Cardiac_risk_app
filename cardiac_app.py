@@ -5,14 +5,14 @@ import random
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
-# ========== Page Config ==========
+# ========== Page Setup ==========
 st.set_page_config(page_title="Cardiac Risk Monitor", page_icon="🫀", layout="centered")
 st.title("💓 Cardiac Risk Monitor 2.0")
-st.caption("Auto-refreshes every 3 minutes with simulated readings")
+st.caption("Switch between Auto and Manual Input • Auto-updates every 3 minutes")
 
-# ========== Refresh Trigger ==========
-refresh_counter = st_autorefresh(interval=180000, key="auto-refresh")  # every 3 min
+refresh_count = st_autorefresh(interval=180000, key="refresh_trigger")
 
+# ========== Database Setup ==========
 DB_NAME = "cardiac_monitor.db"
 
 def init_db():
@@ -32,13 +32,10 @@ def calculate_risk(spo2, hr, ecg, bmi):
     if spo2 < 92: score += 3
     elif spo2 < 94: score += 2
     elif spo2 < 96: score += 1
-
     if hr > 130 or hr <= 40: score += 3
     elif hr > 110 or hr <= 50: score += 2
     elif hr > 90 or hr <= 60: score += 1
-
     if ecg == 3: score += 3
-
     if bmi >= 40 or bmi < 18.5: score += 3
     elif bmi >= 30: score += 2
     elif bmi >= 25: score += 1
@@ -47,12 +44,6 @@ def calculate_risk(spo2, hr, ecg, bmi):
     elif score <= 2: return score, "🟡 Low Risk"
     elif score <= 5: return score, "🟠 Medium Risk"
     else: return score, "🔴 High Risk"
-
-def simulate_vitals():
-    spo2 = round(random.uniform(89, 99), 1)
-    hr = random.randint(45, 140)
-    ecg = random.choices([0, 1, 3], weights=[0.85, 0.1, 0.05])[0]
-    return spo2, hr, ecg
 
 def save_reading(ts, spo2, hr, ecg, bmi, score, level):
     conn = sqlite3.connect(DB_NAME)
@@ -64,29 +55,52 @@ def save_reading(ts, spo2, hr, ecg, bmi, score, level):
 
 def load_history(limit=10):
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql(f"SELECT * FROM readings ORDER BY timestamp DESC LIMIT {limit}", conn)
+    df = pd.read_sql(f'SELECT * FROM readings ORDER BY timestamp DESC LIMIT {limit}', conn)
     conn.close()
     return df
 
-# ========== BMI Input ==========
-bmi = st.number_input("Set Patient's BMI (used for all automatic readings)", min_value=15.0, max_value=50.0, value=25.0, step=0.1)
+def simulate_vitals():
+    spo2 = round(random.uniform(89, 99), 1)
+    hr = random.randint(45, 140)
+    ecg = random.choices([0, 1, 3], weights=[0.8, 0.15, 0.05])[0]
+    return spo2, hr, ecg
 
-# ========== Auto Simulate on Every Refresh ==========
-if refresh_counter > 0:
-    spo2, hr, ecg = simulate_vitals()
-    score, level = calculate_risk(spo2, hr, ecg, bmi)
-    timestamp = datetime.now().isoformat()
-    save_reading(timestamp, spo2, hr, ecg, bmi, score, level)
+# ========== Mode Selection ==========
+mode = st.radio("Select Mode", ["🔁 Auto Mode", "✍️ Manual Mode"], horizontal=True)
 
-    st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} | SpO₂: {spo2}% | HR: {hr} bpm | ECG: {ecg} → Risk: {level}")
+# ========== Shared BMI ==========
+bmi = st.number_input("Enter Patient's BMI", min_value=15.0, max_value=50.0, value=25.0, step=0.1)
 
-# ========== Show Table ==========
-st.markdown("### 📋 Reading History")
-history = load_history()
+# ========== Auto Mode ==========
+if mode == "🔁 Auto Mode":
+    if refresh_count > 0:
+        spo2, hr, ecg = simulate_vitals()
+        score, level = calculate_risk(spo2, hr, ecg, bmi)
+        ts = datetime.now().isoformat()
+        save_reading(ts, spo2, hr, ecg, bmi, score, level)
+        st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} | SpO₂: {spo2}% | HR: {hr} bpm | ECG: {ecg} → Risk: {level}")
+    else:
+        st.info("Waiting for first auto-refresh...")
 
-if history.empty:
-    st.info("No readings yet.")
+# ========== Manual Mode ==========
+if mode == "✍️ Manual Mode":
+    st.markdown("### 🧪 Enter Vital Signs Below")
+    spo2 = st.slider("SpO₂ (%)", 85, 100, 96)
+    hr = st.slider("Heart Rate (bpm)", 30, 160, 75)
+    ecg = st.selectbox("ECG Classification", [0, 1, 3], help="0=Normal, 3=Abnormal")
+
+    if st.button("🧠 Assess Risk"):
+        score, level = calculate_risk(spo2, hr, ecg, bmi)
+        ts = datetime.now().isoformat()
+        save_reading(ts, spo2, hr, ecg, bmi, score, level)
+        st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} | Risk: {level} • Score: {score}")
+
+# ========== History ==========
+st.markdown("### 📋 Last Readings")
+df = load_history()
+if df.empty:
+    st.info("No readings saved yet.")
 else:
-    st.dataframe(history, use_container_width=True)
-    csv = history.to_csv(index=False).encode("utf-8")
+    st.dataframe(df, use_container_width=True)
+    csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("📤 Export CSV", data=csv, file_name="cardiac_readings.csv", mime="text/csv", use_container_width=True)
