@@ -4,15 +4,20 @@ import sqlite3
 import random
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
+import altair as alt
 
 # ========== Page Setup ==========
 st.set_page_config(page_title="Cardiac Risk Monitor", page_icon="🫀", layout="centered")
+
+# Optional logo (add logo.png to repo)
+st.sidebar.image("logo.png", width=120)
+
 st.title("💓 Cardiac Risk Monitor 2.0")
-st.caption("Simulates auto-readings or allows manual input • Refreshes every 3 minutes")
+st.caption("Switch between Auto and Manual input • Visualize trends • Refreshes every 3 minutes")
 
 refresh_count = st_autorefresh(interval=180000, key="auto-refresh")
 
-# ========== Database Setup ==========
+# ========== Database ==========
 DB_NAME = "cardiac_monitor.db"
 
 def init_db():
@@ -39,6 +44,7 @@ def calculate_risk(spo2, hr, ecg, bmi):
     if bmi >= 40 or bmi < 18.5: score += 3
     elif bmi >= 30: score += 2
     elif bmi >= 25: score += 1
+
     if score == 0: return score, "🟢 Normal"
     elif score <= 2: return score, "🟡 Low Risk"
     elif score <= 5: return score, "🟠 Medium Risk"
@@ -64,11 +70,9 @@ def load_history(limit=10):
     conn.close()
     return df
 
-# ========== Mode Switch ==========
+# ========== UI ==========
 mode = st.radio("Select Input Mode", ["🔁 Auto Mode", "✍️ Manual Mode"], horizontal=True)
-
-# ========== Shared BMI ==========
-bmi = st.number_input("Set Patient BMI (used in risk scoring)", min_value=15.0, max_value=50.0, value=25.0, step=0.1)
+bmi = st.number_input("Patient BMI (used in risk scoring)", 15.0, 50.0, step=0.1, value=25.0)
 
 # ========== Auto Mode ==========
 if mode == "🔁 Auto Mode":
@@ -77,9 +81,9 @@ if mode == "🔁 Auto Mode":
         score, level = calculate_risk(spo2, hr, ecg, bmi)
         timestamp = datetime.now().isoformat()
         save_reading(timestamp, spo2, hr, ecg, bmi, score, level)
-        st.metric(label="Current Risk", value=level, delta=f"Score: {score}")
+        st.metric(label="Current Auto Risk", value=level, delta=f"Score: {score}")
     else:
-        st.info("Waiting for first auto-refresh...")
+        st.info("Waiting for auto-refresh...")
 
 # ========== Manual Mode ==========
 if mode == "✍️ Manual Mode":
@@ -93,18 +97,35 @@ if mode == "✍️ Manual Mode":
         save_reading(timestamp, spo2, hr, ecg, bmi, score, level)
         st.metric(label="Manual Risk Result", value=level, delta=f"Score: {score}")
 
-# ========== History Table ==========
+# ========== History ==========
 st.markdown("---")
-st.markdown("### 📋 History of Readings")
-history_df = load_history(limit=10)
-if history_df.empty:
+st.markdown("### 📋 Reading History")
+df = load_history()
+
+if df.empty:
     st.info("No readings yet.")
 else:
-    st.dataframe(history_df, use_container_width=True)
-    csv = history_df.to_csv(index=False).encode("utf-8")
-    st.download_button("📤 Export Readings as CSV", data=csv, file_name="cardiac_readings.csv", mime="text/csv", use_container_width=True)
+    st.dataframe(df, use_container_width=True)
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("📤 Export CSV", data=csv, file_name="cardiac_readings.csv", mime="text/csv")
 
-    # Optional: Chart
-    history_df["timestamp"] = pd.to_datetime(history_df["timestamp"])
-    history_df = history_df.sort_values("timestamp")
-    st.line_chart(data=history_df.set_index("timestamp")[["total_risk"]])
+    # Risk Trend Visualization
+    st.markdown("### 📈 Risk Score Trend (Color Coded)")
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp")
+
+    def risk_color(score):
+        if score == 0: return "#21BF73"  # green
+        elif score <= 2: return "#FFC300"
+        elif score <= 5: return "#FF6F00"
+        else: return "#C70039"
+
+    df["color"] = df["total_risk"].apply(risk_color)
+
+    chart = alt.Chart(df).mark_line(point=alt.OverlayMarkDef(filled=True, size=80)).encode(
+        x=alt.X("timestamp:T", title="Time"),
+        y=alt.Y("total_risk:Q", title="Risk Score", scale=alt.Scale(domain=[0, 9])),
+        color=alt.Color("color:N", scale=None, legend=None)
+    ).properties(height=300, width=700)
+
+    st.altair_chart(chart, use_container_width=True)
