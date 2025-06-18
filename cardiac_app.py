@@ -5,13 +5,13 @@ import random
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
-# ========== Config ==========
+# ========== Page Config ==========
 st.set_page_config(page_title="Cardiac Risk Monitor", page_icon="🫀", layout="centered")
 st.title("💓 Cardiac Risk Monitor 2.0")
-st.caption("Simulated auto-readings every 3 minutes — set BMI once")
+st.caption("Auto-refreshes every 3 minutes with simulated readings")
 
-# ========== Auto-refresh every 3 minutes ==========
-count = st_autorefresh(interval=180000, key="refresh_key")
+# ========== Refresh Trigger ==========
+refresh_counter = st_autorefresh(interval=180000, key="auto-refresh")  # every 3 min
 
 DB_NAME = "cardiac_monitor.db"
 
@@ -43,51 +43,50 @@ def calculate_risk(spo2, hr, ecg, bmi):
     elif bmi >= 30: score += 2
     elif bmi >= 25: score += 1
 
-    if score == 0: level = "🟢 Normal"
-    elif score <= 2: level = "🟡 Low Risk"
-    elif score <= 5: level = "🟠 Medium Risk"
-    else: level = "🔴 High Risk"
+    if score == 0: return score, "🟢 Normal"
+    elif score <= 2: return score, "🟡 Low Risk"
+    elif score <= 5: return score, "🟠 Medium Risk"
+    else: return score, "🔴 High Risk"
 
-    return score, level
+def simulate_vitals():
+    spo2 = round(random.uniform(89, 99), 1)
+    hr = random.randint(45, 140)
+    ecg = random.choices([0, 1, 3], weights=[0.85, 0.1, 0.05])[0]
+    return spo2, hr, ecg
 
-def save_reading(ts, spo2, hr, ecg, bmi, risk_score, risk_level):
+def save_reading(ts, spo2, hr, ecg, bmi, score, level):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('INSERT INTO readings VALUES (?, ?, ?, ?, ?, ?, ?)',
-              (ts, spo2, hr, ecg, bmi, risk_score, risk_level))
+              (ts, spo2, hr, ecg, bmi, score, level))
     conn.commit()
     conn.close()
 
 def load_history(limit=10):
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql(f'SELECT * FROM readings ORDER BY timestamp DESC LIMIT {limit}', conn)
+    df = pd.read_sql(f"SELECT * FROM readings ORDER BY timestamp DESC LIMIT {limit}", conn)
     conn.close()
     return df
 
-# ========== Persistent BMI ==========
-bmi = st.number_input("Enter Patient's BMI (used for all future simulations)", min_value=15.0, max_value=50.0, value=25.0, key="bmi_input")
+# ========== BMI Input ==========
+bmi = st.number_input("Set Patient's BMI (used for all automatic readings)", min_value=15.0, max_value=50.0, value=25.0, step=0.1)
 
-# ========== Simulate Readings Automatically ==========
-def simulate_and_save():
-    spo2 = round(random.uniform(89, 99), 1)
-    hr = random.randint(45, 140)
-    ecg = random.choices([0, 1, 3], weights=[0.85, 0.1, 0.05])[0]
-    risk_score, risk_level = calculate_risk(spo2, hr, ecg, bmi)
-    ts = datetime.now().isoformat()
-    save_reading(ts, spo2, hr, ecg, bmi, risk_score, risk_level)
-    return ts, spo2, hr, ecg, risk_score, risk_level
+# ========== Auto Simulate on Every Refresh ==========
+if refresh_counter > 0:
+    spo2, hr, ecg = simulate_vitals()
+    score, level = calculate_risk(spo2, hr, ecg, bmi)
+    timestamp = datetime.now().isoformat()
+    save_reading(timestamp, spo2, hr, ecg, bmi, score, level)
 
-# ========== Trigger Simulation ==========
-ts, spo2, hr, ecg, score, risk_level = simulate_and_save()
+    st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} | SpO₂: {spo2}% | HR: {hr} bpm | ECG: {ecg} → Risk: {level}")
 
-st.success(f"🕒 {datetime.now().strftime('%H:%M:%S')} • HR: {hr} • SpO₂: {spo2}% • ECG: {ecg} → Risk: {risk_level}")
-
-# ========== Display History ==========
-st.markdown("### 📋 Recent Readings")
+# ========== Show Table ==========
+st.markdown("### 📋 Reading History")
 history = load_history()
+
 if history.empty:
-    st.info("No data yet")
+    st.info("No readings yet.")
 else:
     st.dataframe(history, use_container_width=True)
     csv = history.to_csv(index=False).encode("utf-8")
-    st.download_button("📤 Export CSV", data=csv, file_name="cardiac_auto_log.csv", mime="text/csv", use_container_width=True)
+    st.download_button("📤 Export CSV", data=csv, file_name="cardiac_readings.csv", mime="text/csv", use_container_width=True)
