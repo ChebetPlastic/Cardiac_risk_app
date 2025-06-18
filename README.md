@@ -3,7 +3,7 @@
 Real-time vitals monitoring with cardiac risk scoring, powered by Streamlit.  
 Visualize trends, export data, and assess patients with intuitive auto/manual input modes.
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https:[//your-subdomain.streamlit.app](https://cardiacriskapp.streamlit.app/)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://cardiacriskapp.streamlit.app/)
 
 ---
 
