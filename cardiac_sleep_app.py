@@ -12,9 +12,8 @@ from collections import deque
 # --------------------------------------------------
 rf = joblib.load("sleep_cardiac_rf.pkl")
 scaler = joblib.load("sleep_cardiac_scaler.pkl")
-label_to_idx = joblib.load("sleep_cardiac_label_map.pkl")
-
-idx_to_label = {v: k for k, v in label_to_idx.items()}
+LABELS = ["High", "Low", "Medium"]
+idx_to_label = {i: lab for i, lab in enumerate(LABELS)}
 
 FEATURE_ORDER = [
     "HR", "SPO2", "BMI",
