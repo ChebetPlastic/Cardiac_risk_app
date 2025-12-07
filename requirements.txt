@@ -1,8 +1,6 @@
 streamlit
 streamlit-autorefresh
-numpy
 pandas
+numpy
 scikit-learn
 joblib
-tensorflow-cpu==2.11.0
-markdown-it-py==2.2.0
