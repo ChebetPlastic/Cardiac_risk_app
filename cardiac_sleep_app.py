@@ -8,7 +8,7 @@ from streamlit_autorefresh import st_autorefresh
 # 1. Page Config
 st.set_page_config(page_title="Sleep-Cardiac Risk Monitor", page_icon="❤️", layout="centered")
 
-# 2. Auto-Refresh (3 minutes)
+# 2. Auto-Refresh (3 minutes = 180,000ms)
 count = st_autorefresh(interval=3 * 60 * 1000, key="data_refresh")
 
 # 3. Logic Functions
@@ -39,7 +39,7 @@ def calculate_news_score(hr, spo2, deep_sleep, wakeups, snoring_cat):
 
 @st.cache_resource
 def load_rf_model():
-    # Try both potential filenames to be safe
+    # Checks for both potential filenames
     if os.path.exists('sleep_cardiac_rf.pkl'):
         return joblib.load('sleep_cardiac_rf.pkl')
     elif os.path.exists('rf_model.pkl'):
@@ -62,20 +62,18 @@ if mode:
     spo2 = np.random.randint(90, 99)
     deep_sleep = np.random.uniform(0.5, 3.0)
     rem_sleep = np.random.uniform(0.5, 2.5)
-    sleep_dur = deep_sleep + rem_sleep + np.random.uniform(2.0, 4.0) # Est total sleep
+    sleep_dur = deep_sleep + rem_sleep + np.random.uniform(2.0, 4.0) 
     wakeups = np.random.randint(0, 4)
     snoring = np.random.choice(["No / minimal", "Moderate", "Significant"])
-    ecg_status = "Normal" 
+    ecg_status = "Normal"
 else:
     # Manual Inputs
     with st.expander("Patient Vital Signs (HR / SpO2 / ECG)", expanded=False):
         hr = st.slider("Heart Rate (BPM)", 40, 140, 72)
         spo2 = st.slider("SpO2 (%)", 85, 100, 96)
-        # RESTORED: ECG Input (Required for 9 features)
         ecg_status = st.radio("ECG Status", ["Normal", "Abnormal"], horizontal=True)
 
     st.write("### Sleep Architecture Input")
-    # RESTORED: Sleep Duration (Required for 9 features)
     sleep_dur = st.slider("Total Sleep Duration (hrs)", 4.0, 12.0, 7.5, step=0.5)
     deep_sleep = st.slider("Deep sleep (hours)", 0.0, 5.0, 2.0, step=0.1)
     rem_sleep = st.slider("REM sleep (hours)", 0.0, 5.0, 1.5, step=0.1)
@@ -95,41 +93,39 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
     
     if model:
         try:
-            # --- DATA PREPARATION (FIXED TO 9 FEATURES) ---
-            
-            # Map Categorical inputs to numbers for the model
+            # --- DATA PREPARATION (9 FEATURES) ---
             ecg_val = 1 if ecg_status == "Abnormal" else 0
             
             snoring_map = {"No / minimal": 0, "Moderate": 5, "Significant": 10}
             snoring_val = snoring_map.get(snoring, 0)
 
-            # Create DataFrame with EXACTLY 9 columns in the likely order
-            # We include 'TotalScore' (from rules) as the 9th feature
+            # Create DataFrame with EXACTLY 9 columns
             input_data = pd.DataFrame([[
-                hr,             # 1. HeartRate
-                spo2,           # 2. SpO2
-                ecg_val,        # 3. ECG_Class
-                sleep_dur,      # 4. SleepDur
-                deep_sleep,     # 5. DeepSleep
-                rem_sleep,      # 6. REM_Sleep
-                wakeups,        # 7. Wakeups
-                snoring_val,    # 8. Snoring
-                total_score     # 9. VitalScore / TotalScore (The engineered feature)
-            ]], columns=['HeartRate', 'SpO2', 'ECG_Class', 'SleepDur', 'DeepSleep', 'REM_Sleep', 'Wakeups', 'Snoring', 'TotalScore'])
+                hr, spo2, ecg_val, sleep_dur, deep_sleep, rem_sleep, 
+                wakeups, snoring_val, total_score
+            ]], columns=['HeartRate', 'SpO2', 'ECG_Class', 'SleepDur', 
+                         'DeepSleep', 'REM_Sleep', 'Wakeups', 'Snoring', 'TotalScore'])
             
-            ml_pred = model.predict(input_data)[0]
-            ml_class = ml_pred
+            raw_pred = model.predict(input_data)[0]
             
-        except ValueError as e:
-            st.error(f"Model Shape Error: {e}")
-            ml_class = "Error"
+            # --- MAPPING FIX: Convert Numbers (0-3) to Text ---
+            # Adjust these if your model uses different numbers
+            label_map = {
+                0: "Low Risk",
+                1: "Medium Risk",
+                2: "High Risk",
+                3: "Severe Risk"
+            }
+            # Get the text label. If the number isn't in the map, show the number.
+            ml_class = label_map.get(raw_pred, f"Class {raw_pred}")
+            
         except Exception as e:
             st.error(f"Prediction Error: {e}")
             ml_class = "Error"
     else:
-        ml_class = band # Fallback for demo
+        ml_class = band # Fallback
         
-    # --- DISPLAY RESULTS (Black UI Style) ---
+    # --- DISPLAY RESULTS ---
     st.divider()
     
     # SECTION A: Rule-Based Result
@@ -150,14 +146,15 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
     st.write("")
     st.subheader("🤖 RandomForest prediction")
     
-    if ml_class == "High":
-        st.error(f"RF class: {ml_class}")
-    elif ml_class == "Medium":
-        st.warning(f"RF class: {ml_class}")
-    elif ml_class == "Error":
-        st.info("Could not load model. Showing Rule-Based result only.")
+    # Logic to choose color based on text label
+    if "High" in str(ml_class) or "Severe" in str(ml_class) or "Class 3" in str(ml_class):
+        st.error(f"RF result: {ml_class}")
+    elif "Medium" in str(ml_class) or "Class 2" in str(ml_class):
+        st.warning(f"RF result: {ml_class}")
+    elif "Error" in str(ml_class):
+        st.info("Model not loaded. Showing Rule-Based result only.")
     else:
-        st.success(f"RF class: {ml_class}")
+        st.success(f"RF result: {ml_class}")
 
     if mode:
         st.caption("Values simulated. Next update in 3 minutes.")
