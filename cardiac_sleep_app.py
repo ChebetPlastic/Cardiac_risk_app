@@ -1,18 +1,22 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import os
 from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
 
 # 1. Page Config
 st.set_page_config(page_title="Sleep-Cardiac Risk Monitor", page_icon="❤️", layout="centered")
 
-# 2. Auto-Refresh
+# 2. Session State for History (Stores last 10 readings)
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+# 3. Auto-Refresh (3 minutes)
 count = st_autorefresh(interval=3 * 60 * 1000, key="data_refresh")
 
-# 3. Logic Functions
+# 4. Logic Functions
 def calculate_news_score(hr, spo2, deep_sleep, wakeups, snoring_cat):
     vital_score = 0
     if spo2 < 95: vital_score += 2
@@ -48,7 +52,7 @@ def load_components():
     return data
 
 # ==========================================
-# 4. USER INTERFACE
+# 5. USER INTERFACE
 # ==========================================
 
 st.title("Sleep-Cardiac Risk Monitor")
@@ -57,6 +61,7 @@ mode = st.toggle("Enable Auto-Simulation Mode", value=False)
 
 if mode:
     st.info(f"🔄 Auto-Mode Active. Refreshing every 3 mins.")
+    # Simulate data
     hr = np.random.randint(60, 110)
     spo2 = np.random.randint(90, 99)
     deep_sleep = np.random.uniform(0.5, 3.0)
@@ -66,6 +71,7 @@ if mode:
     snoring = np.random.choice(["No / minimal", "Moderate", "Significant"])
     ecg_status = "Normal"
 else:
+    # Manual Inputs
     with st.expander("Patient Vital Signs (HR / SpO2 / ECG)", expanded=False):
         hr = st.slider("Heart Rate (BPM)", 40, 140, 72)
         spo2 = st.slider("SpO2 (%)", 85, 100, 96)
@@ -91,25 +97,6 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
     scaler = components["scaler"]
     ml_class = "Unknown"
     
-    # --- DISPLAY RESULTS ---
-    st.divider()
-    
-    # SECTION A: Rule-Based
-    st.subheader("Rule-based NEWS + sleep result")
-    color_map = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}
-    icon = color_map.get(band, "⚪")
-    st.markdown(f"### {icon} {band} Risk")
-    st.caption(f"Vital score: {v_score} | Sleep score: {s_score} | Total score: {total_score}")
-    
-    if band == "Medium" or band == "High":
-        st.warning(f"Risk Band (rules): **{band}**")
-    else:
-        st.success(f"Risk Band (rules): **{band}**")
-
-    # SECTION B: Random Forest
-    st.write("")
-    st.subheader("🤖 RandomForest prediction")
-    
     if model:
         try:
             # Prepare Data
@@ -133,31 +120,80 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
             # Predict
             raw_pred = model.predict(final_input)[0]
             
-            # --- FINAL CORRECTED MAPPING ---
-            # Based on your classes [1, 2, 3]
+            # --- FINAL MAPPING ---
             label_map = {
                 1: "Low Risk",
                 2: "Medium Risk",
                 3: "High Risk"
             }
-            # Fallback for 0 just in case
             if raw_pred == 0: 
                 ml_class = "Low Risk"
             else:
                 ml_class = label_map.get(raw_pred, f"Class {raw_pred}")
 
-            # Display Result
-            if "High" in str(ml_class) or "Severe" in str(ml_class):
-                st.error(f"RF result: {ml_class}")
-            elif "Medium" in str(ml_class):
-                st.warning(f"RF result: {ml_class}")
-            else:
-                st.success(f"RF result: {ml_class}")
-
         except Exception as e:
             st.error(f"Prediction Error: {e}")
+            ml_class = "Error"
     else:
+        ml_class = band # Fallback
+
+    # --- SAVE TO HISTORY (New Feature) ---
+    new_record = {
+        "Time": datetime.now().strftime("%H:%M:%S"),
+        "HR": hr,
+        "SpO2": spo2,
+        "Deep Sleep": f"{deep_sleep:.1f}h",
+        "Wakeups": wakeups,
+        "Rule Band": band,
+        "AI Prediction": ml_class
+    }
+    # Add to top of list
+    st.session_state.history.insert(0, new_record)
+    # Keep only last 10
+    st.session_state.history = st.session_state.history[:10]
+        
+    # --- DISPLAY RESULTS ---
+    st.divider()
+    
+    # SECTION A: Rule-Based
+    st.subheader("Rule-based NEWS + sleep result")
+    color_map = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}
+    icon = color_map.get(band, "⚪")
+    st.markdown(f"### {icon} {band} Risk")
+    st.caption(f"Vital score: {v_score} | Sleep score: {s_score} | Total score: {total_score}")
+    
+    if band == "Medium" or band == "High":
+        st.warning(f"Risk Band (rules): **{band}**")
+    else:
+        st.success(f"Risk Band (rules): **{band}**")
+
+    # SECTION B: Random Forest
+    st.write("")
+    st.subheader("🤖 RandomForest prediction")
+    
+    if "High" in str(ml_class) or "Severe" in str(ml_class):
+        st.error(f"RF result: {ml_class}")
+    elif "Medium" in str(ml_class):
+        st.warning(f"RF result: {ml_class}")
+    elif "Error" in str(ml_class):
         st.info("Model not loaded.")
+    else:
+        st.success(f"RF result: {ml_class}")
+
+    # Explanation note
+    if band != ml_class.split(" ")[0] and "Error" not in ml_class:
+        st.info(f"ℹ️ Hybrid Insight: The AI detected {ml_class} patterns, differing from the Clinical Rule ({band}).")
 
     if mode:
         st.caption("Values simulated. Next update in 3 minutes.")
+
+# --- SECTION C: HISTORY TABLE ---
+st.divider()
+st.subheader("📜 Recent History (Last 10 Readings)")
+
+if len(st.session_state.history) > 0:
+    # Convert list of dicts to DataFrame for nice display
+    history_df = pd.DataFrame(st.session_state.history)
+    st.dataframe(history_df, use_container_width=True, hide_index=True)
+else:
+    st.write("No readings yet. Click 'Assess risk' to begin.")
