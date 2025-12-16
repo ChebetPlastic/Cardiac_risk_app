@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -105,7 +106,7 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
     else:
         st.success(f"Risk Band (rules): **{band}**")
 
-    # SECTION B: Random Forest (With Debugging)
+    # SECTION B: Random Forest
     st.write("")
     st.subheader("🤖 RandomForest prediction")
     
@@ -132,19 +133,18 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
             # Predict
             raw_pred = model.predict(final_input)[0]
             
-            # --- DYNAMIC MAPPING (The Fix) ---
-            # We check what classes the model actually has
-            if hasattr(model, 'classes_'):
-                class_labels = model.classes_
-                # If model returns an index (0,1,2), map it to the label
-                if isinstance(raw_pred, (int, np.integer)) and raw_pred < len(class_labels):
-                    ml_class = class_labels[raw_pred]
-                else:
-                    ml_class = raw_pred # It might be returning the string directly
+            # --- FINAL CORRECTED MAPPING ---
+            # Based on your classes [1, 2, 3]
+            label_map = {
+                1: "Low Risk",
+                2: "Medium Risk",
+                3: "High Risk"
+            }
+            # Fallback for 0 just in case
+            if raw_pred == 0: 
+                ml_class = "Low Risk"
             else:
-                # Fallback manual map if classes_ is missing
-                label_map = {0: "Low Risk", 1: "Medium Risk", 2: "High Risk", 3: "Severe Risk"}
-                ml_class = label_map.get(raw_pred, raw_pred)
+                ml_class = label_map.get(raw_pred, f"Class {raw_pred}")
 
             # Display Result
             if "High" in str(ml_class) or "Severe" in str(ml_class):
@@ -153,19 +153,6 @@ if mode or st.button("Assess risk", type="primary", use_container_width=True):
                 st.warning(f"RF result: {ml_class}")
             else:
                 st.success(f"RF result: {ml_class}")
-                
-            # --- DEBUG PANEL (Remove this after fixing) ---
-            with st.expander("🛠️ Diagnostics (Why is this happening?)", expanded=True):
-                st.write(f"**Raw Prediction Value:** `{raw_pred}`")
-                if hasattr(model, 'classes_'):
-                    st.write(f"**Model Classes Found:** `{model.classes_}`")
-                st.write("**Data sent to model:**")
-                st.dataframe(input_df)
-                if scaler:
-                    st.write("**Scaled Data (What model sees):**")
-                    st.write(final_input)
-                else:
-                    st.error("Scaler NOT found - using raw data (This causes High Risk errors!)")
 
         except Exception as e:
             st.error(f"Prediction Error: {e}")
